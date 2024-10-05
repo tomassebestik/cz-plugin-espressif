@@ -104,6 +104,6 @@ jobs:
       - name: Create PyPI release and (upload assets to PyPI)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_PROJECT_TOKEN }}
+          password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}
           skip-existing: true
           verify-metadata: true
