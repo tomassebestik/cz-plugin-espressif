@@ -116,3 +116,7 @@ gitstyle := '%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s
 @rebase base="master":
     git fetch origin {{base}}
     git rebase -i origin/{{base}}
+
+# Upload to test PyPI
+@upload-test:
+    twine upload --repository testpypi dist/*

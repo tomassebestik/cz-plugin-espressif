@@ -14,55 +14,35 @@
 </div>
 <hr>
 
-## v1.2.0 (2024-10-02)
+## Unreleased
+
+---
+
+## v1.2.0 (2024-10-05)
 
 ### ✨ New features
 
 - **test-suite**: add tests changelog/plugin, compare with snapshots (syrupy module) *(Tomas Sebestik - c4d78e3)*
+- **changelog**: custom template for release notes (GH action) *(Tomas Sebestik - 19e8cec)*
+- **plugin**: add plugin, commit message questions, changelog template (#1) *(Tomas Sebestik - f2fa815)*
+- init commit, project basic structure (from template commitizen) *(Tomas Sebestik - 61c03ec)*
 
 ### 🐛 Bug fixes
 
 - **changelog**: fix double title, header and footer on 'cz bump' *(Tomas Sebestik - b5a1227)*
+- **github-actions**: update create-release.yml, missing "v" in version
+- (dependabot): update dependabot config file, team reviewers
+- (justfile): add recipe for local cleanup temp, manual tests *(Tomas Sebestik - f601dbf)*
+- **pre-commit**: change lang from system to python to be able install deps *(Tomas Sebestik - 7443af0)*
 
 ### 📖 Documentation
 
 - **contributing**: update docs for setup dev environment and testing *(Tomas Sebestik - dfca4d6)*
+- **readme**: docs to automatic process of "Release notes" *(Tomas Sebestik - 6a18980)*
 
 ### 🔧 Code refactoring
 
 - **python-3.9**: refactor syntax and typing for python 3.9 *(Tomas Sebestik - e5a83c6)*
-
-## v1.1.0 (2024-09-24)
-
-### ✨ New features
-
-- **changelog**: custom template for release notes (GH action) *(Tomas Sebestik - 19e8cec)*
-
-### 🐛 Bug fixes
-
-- **github-actions**: update create-release.yml, missing "v" in version
-- (dependabot): update dependabot config file, team reviewers
-- (justfile): add recipe for local cleanup temp, manual tests *(Tomas Sebestik - f601dbf)*
-
-### 📖 Documentation
-
-- **readme**: docs to automatic process of "Release notes" *(Tomas Sebestik - 6a18980)*
-
----
-
-## v1.0.1 (2024-09-10)
-
-### 🐛 Bug fixes
-
-- **pre-commit**: change lang from system to python to be able install deps *(Tomas Sebestik - 7443af0)*
-
----
-
-## v1.0.0 (2024-09-10)
-
-### ✨ New features
-
-- **plugin**: add plugin, commit message questions, changelog template (#1) *(Tomas Sebestik - f2fa815)*
 
 ---
 

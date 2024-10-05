@@ -8,7 +8,12 @@ name: 📦 Create Release GitHub and PyPI
 
 on:
   workflow_dispatch:
-  push: {tags: ['*v[0-9]*']}
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.2.0)'
+        required: true
+        default: '1.2.0'
+  push: {tags: ['*v[0-9]*'], branches: ['master']}
 
 jobs:
   build-release-assets:
@@ -70,13 +75,24 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .
 
-      - name: Get release version from "czespressif/__init__.py"
-        run: |-
-          version=$(grep '__version__' czespressif/__init__.py | sed -E "s/__version__ = '([^ ]*)'.*/\1/")
-          echo "VERSION=$version" >> $GITHUB_ENV
+      - name: Use manual version input   # DEVTEST: this is for testing purposes
+        run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+
+      # - name: Get release version from "czespressif/__init__.py"
+      #   run: |-
+      #     version=$(grep '__version__' czespressif/__init__.py | sed -E "s/__version__ = '([^ ]*)'.*/\1/")
+      #     echo "VERSION=$version" >> $GITHUB_ENV
 
       - name: Generate Release notes from Changelog
-        run: cz changelog v${{ env.VERSION }} --template="RELEASE_NOTES.md.j2" --file-name="RELEASE_NOTES.md"
+        run: |
+          pwd
+          ls -la
+          cz changelog v1.2.0 --file-name="RELEASE_NOTES.md"
+          ls -la
+          cat RELEASE_NOTES.md
+
+      - name: Check if RELEASE_NOTES.md exists # DEVTEST: this is for testing purposes
+        run: ls -l RELEASE_NOTES.md
 
       - name: Show Release notes
         run: cat RELEASE_NOTES.md
@@ -87,23 +103,26 @@ jobs:
           pattern: python-package-*
           merge-multiple: true
 
-      - name: Create GitHub release (and upload assets)
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          body_path: RELEASE_NOTES.md
-          name: Version v${{ env.VERSION }}
-          draft: false
-          prerelease: false
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
+      - name: List dist files # DEVTEST: this is for testing purposes
+        run: ls -l dist/
 
-      - name: Create PyPI release and (upload assets to PyPI)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}
-          skip-existing: true
-          verify-metadata: true
+      # - name: Create GitHub release (and upload assets)
+      #   id: create_release
+      #   uses: softprops/action-gh-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     body_path: RELEASE_NOTES.md
+      #     name: Version v${{ env.VERSION }}
+      #     draft: false
+      #     prerelease: false
+      #     files: |
+      #       dist/*.whl
+      #       dist/*.tar.gz
+
+      # - name: Create PyPI release and (upload assets to PyPI)
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}
+      #     skip-existing: true
+      #     verify-metadata: true
