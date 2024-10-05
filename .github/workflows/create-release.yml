@@ -15,6 +15,10 @@ on:
         default: '1.3.0'
   push: {tags: ['*v[0-9]*'], branches: ['master']}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-release-assets:
     runs-on: ubuntu-latest
@@ -47,66 +51,113 @@ jobs:
           pip install build
 
       - name: Build python wheels + package source code
-        run: python -m build
+        run: |
+          python -m build
+          ls -la dist/
 
-      - name: Upload builds
+      - name: Upload build artifact
         uses: actions/upload-artifact@v3
         with:
-          name: python-package-${{ matrix.python-version }}
-          path: dist/*
+          name: build-artifact-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
+          path: dist
+
+  collect-and-upload:
+    needs: build-release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # To upload the deduplicated artifacts
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Remove duplicates (Compare only wheel files, copy source code directly)
+        run: |
+          mkdir -p deduplicated
+          # Compare and deduplicate wheel files
+          for file in ./artifacts/**/czespressif-*.whl; do
+            filename=$(basename $file)
+            if [[ -f "deduplicated/$filename" ]]; then
+              if ! cmp -s "$file" "deduplicated/$filename"; then
+                echo "Warning: Files $file and deduplicated/$filename are different!"
+              else
+                echo "Overwriting $filename since the content is the same."
+                cp -f "$file" "deduplicated/$filename"
+              fi
+            else
+              cp "$file" "deduplicated/$filename"
+            fi
+          done
+
+          # Directly copy the source code archive (czespressif-*.tar.gz)
+          cp -f ./artifacts/**/czespressif-*.tar.gz deduplicated/ || true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: czespressif-merged-builds
+          path: deduplicated
 
   create-release:
-    needs: build-release-assets
+    needs: collect-and-upload
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Download deduplicated artifacts
+        uses: actions/download-artifact@v3
         with:
-          python-version: '3.9' # Minimum supported version - only for running `cz changelog ...`
-          cache: pip
+          name: czespressif-merged-builds
+          path: ./deduplicated
 
-      - name: Install dependencies
-        run: |-
-          python -m pip install --upgrade pip
-          python -m pip install .
+      - name: Show deduplicated artifacts
+        run: |
+          echo "Listing deduplicated artifacts:"
+          ls -la ./deduplicated
 
-      - name: Use manual version input   # DEVTEST: this is for testing purposes
-        run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+      # - name: Checkout repository
+      #   uses: actions/checkout@v4
+
+      # - name: Set up Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.9' # Minimum supported version - only for running `cz changelog ...`
+      #     cache: pip
+
+      # - name: Create dist directory
+      #   run: mkdir -p dist
+
+      # - name: List dist files # DEVTEST: this is for testing purposes
+      #   run: |
+      #     ls -la my_artifacts
+
+      # - name: Install dependencies
+      #   run: |-
+      #     python -m pip install --upgrade pip
+      #     python -m pip install .
+
+      # - name: Use manual version input   # DEVTEST: this is for testing purposes
+      #   run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
 
       # - name: Get release version from "czespressif/__init__.py"
       #   run: |-
       #     version=$(grep '__version__' czespressif/__init__.py | sed -E "s/__version__ = '([^ ]*)'.*/\1/")
       #     echo "VERSION=$version" >> $GITHUB_ENV
 
-      - name: Generate Release notes from Changelog
-        run: |
-          pwd
-          ls -la
-          cz changelog --incremental --file-name="RELEASE_NOTES.md"
-          ls -la
-          cat RELEASE_NOTES.md
+      # - name: Generate Release notes from Changelog
+      #   run: |
+      #     pwd
+      #     ls -la
+      #     cz changelog --incremental --file-name="RELEASE_NOTES.md"
+      #     ls -la
+      #     cat RELEASE_NOTES.md
 
-      - name: Check if RELEASE_NOTES.md exists # DEVTEST: this is for testing purposes
-        run: ls -l RELEASE_NOTES.md
+      # - name: Check if RELEASE_NOTES.md exists # DEVTEST: this is for testing purposes
+      #   run: ls -l RELEASE_NOTES.md
 
-      - name: Show Release notes
-        run: cat RELEASE_NOTES.md
-
-      - name: Download artifacts (builds)
-        uses: actions/download-artifact@v4
-        with:
-          pattern: python-package-*
-          merge-multiple: true
-
-      - name: List dist files # DEVTEST: this is for testing purposes
-        run: |
-          ls -la
-          ls -l dist/
+      # - name: Show Release notes
+      #   run: cat RELEASE_NOTES.md
 
       # - name: Create GitHub release (and upload assets)
       #   id: create_release
