@@ -14,9 +14,17 @@
 </div>
 <hr>
 
-## Unreleased
+## v1.3.0 (2024-10-05)
 
----
+### ✨ New features
+
+- **fake**: introduce real-time notifications for users 367 *(Tomas Sebestik - ddb83fb)*
+- **fake**: introduce real-time notifications for users 366 *(Tomas Sebestik - 039e679)*
+
+### 📖 Documentation
+
+- **fake**: update developer setup guide with latest dependencies 367 *(Tomas Sebestik - 9f2a21f)*
+- **fake**: update developer setup guide with latest dependencies 365 *(Tomas Sebestik - a126551)*
 
 ## v1.2.0 (2024-10-05)
 
