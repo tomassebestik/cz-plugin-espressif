@@ -69,18 +69,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download all builds and merge
-        uses: actions/download-artifact@v4
-        with:
-          path: ./release-assets
-          pattern: czespressif-build-*
-          merge-multiple: true
-
-      - name: Show merged
-        run: |
-          echo "Listing dir artifacts:"
-          ls -la ./release-assets
-
       - name: Checkout repository (full history)
         uses: actions/checkout@v4
         with:
@@ -113,12 +101,24 @@ jobs:
       - name: Show Release notes
         run: cat RELEASE_NOTES.md
 
+      - name: Download all builds and merge
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets
+          pattern: czespressif-build-*
+          merge-multiple: true
+
+      - name: Show merged
+        run: |
+          echo "Listing dir artifacts:"
+          ls -la ./release-assets
+
       - name: Check if all assets are ready
         run: |
           set -e  # Kill the release if any of the following commands fail
           echo "Creating GitHub release for version ${{ steps.release_version.outputs.VERSION }}"
-          echo "Appending release notes: $(cat RELEASE_NOTES.md)"
-          cat cat RELEASE_NOTES.md)
+          echo "Appending release notes:"
+          cat RELEASE_NOTES.md
           echo "Uploading release-assets: "
           ls -la release-assets/*.whl
           ls -la release-assets/*.tar.gz
@@ -144,6 +144,9 @@ jobs:
       contents: write
       id-token: write # For trusted publishing
     steps:
+      - name: Checkout repository (need README.md used as long_description for PyPI)
+        uses: actions/checkout@v4
+
       - name: Download all builds and merge
         uses: actions/download-artifact@v4
         with:
@@ -160,9 +163,9 @@ jobs:
           verify-metadata: true # 'twine check' before upload
           skip-existing: true
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
-          packages-dir: release-assets/
-          verify-metadata: true # 'twine check' before upload
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
+      #     packages-dir: release-assets/
+      #     verify-metadata: true # 'twine check' before upload
