@@ -15,6 +15,8 @@ on:
         default: '1.3.0'
   push: {tags: ['*v[0-9]*'], branches: ['master']}
 
+# TODO: call pytest workflow to run tests before creating a release
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -56,78 +58,66 @@ jobs:
           ls -la dist/
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: build-artifact-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
+          name: czespressif-build-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
           path: dist
 
-  create-release:
+  merge-builds:
+    runs-on: ubuntu-latest
     needs: build-release-assets
+    steps:
+      - name: Merge Artifacts
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: czespressif-builds-merged
+          pattern: czespressif-build-*
+
+  create-release:
+    needs: merge-builds
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./artifacts
 
-      - name: Create deduplicated directory
-        run: mkdir -p deduplicated
-
-      - name: Remove duplicates of wheel files
-        run: find ./artifacts -name "czespressif-*.whl" -exec cp -f {} deduplicated/ \;
-
-      - name: Copy source code archive
-        run: cp -n ./artifacts/**/czespressif-*.tar.gz deduplicated/ || true
-
-      - name: Show deduplicated artifacts
+      - name: Show merged
         run: |
-          echo "Listing deduplicated artifacts:"
-          ls -la ./deduplicated
+          echo "Listing merged artifacts:"
+          ls -la ./artifacts
 
-      - name: Upload merged artifacts
-        uses: actions/upload-artifact@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          name: czespressif-merged-builds
-          path: deduplicated
+          fetch-depth: 0  # Fetch the entire history
 
-      # - name: Checkout repository
-      #   uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' # Minimum supported version - only for running `cz changelog ...`
+          cache: pip
 
-      # - name: Set up Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.9' # Minimum supported version - only for running `cz changelog ...`
-      #     cache: pip
+      - name: Install dependencies
+        run: |-
+          python -m pip install --upgrade pip
+          python -m pip install .
 
-      # - name: Create dist directory
-      #   run: mkdir -p dist
+      - name: Get release version from "czespressif/__init__.py"
+        run: |-
+          version=$(grep '__version__' czespressif/__init__.py | sed -E "s/__version__ = '([^ ]*)'.*/\1/")
+          echo "VERSION=$version" >> $GITHUB_ENV
 
-      # - name: List dist files # DEVTEST: this is for testing purposes
-      #   run: |
-      #     ls -la my_artifacts
+      - name: Show version
+        run: |
+          echo "Version: ${{ env.VERSION }}"
 
-      # - name: Install dependencies
-      #   run: |-
-      #     python -m pip install --upgrade pip
-      #     python -m pip install .
-
-      # - name: Use manual version input   # DEVTEST: this is for testing purposes
-      #   run: echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-
-      # - name: Get release version from "czespressif/__init__.py"
-      #   run: |-
-      #     version=$(grep '__version__' czespressif/__init__.py | sed -E "s/__version__ = '([^ ]*)'.*/\1/")
-      #     echo "VERSION=$version" >> $GITHUB_ENV
-
-      # - name: Generate Release notes from Changelog
-      #   run: |
-      #     pwd
-      #     ls -la
-      #     cz changelog --incremental --file-name="RELEASE_NOTES.md"
-      #     ls -la
-      #     cat RELEASE_NOTES.md
+      - name: Generate Release notes from Changelog
+        run: |
+          cz changelog v${{ env.VERSION }} --template RELEASE_NOTES.md.j2 --file-name RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
 
       # - name: Check if RELEASE_NOTES.md exists # DEVTEST: this is for testing purposes
       #   run: ls -l RELEASE_NOTES.md

@@ -99,7 +99,7 @@
     annotated_tag              = true
     bump_message               = 'change(bump): release $current_version → $new_version [skip-ci]'
     changelog_merge_prerelease = true
-    # changelog_start_rev        = "v0.1.0"
+    changelog_start_rev        = "v1.0.0"
     name                       = "czespressif"
     tag_format                 = "v$version"
     update_changelog_on_bump   = true

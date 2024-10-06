@@ -14,6 +14,26 @@
 </div>
 <hr>
 
+## Unreleased
+
+### ✨ New features
+
+- **fake**: implement caching for database queries 612 *(Tomas Sebestik - adcb0e3)*
+
+### 📖 Documentation
+
+- **fake**: improve documentation on API usage examples 610 *(Tomas Sebestik - 81e2da6)*
+
+### 🔧 Code refactoring
+
+- **fake**: refactoring of project code base 609 *(Tomas Sebestik - 89bd135)*
+
+### 🗑️ Removals
+
+- **fake**: delete old configuration files no longer in use 612 *(Tomas Sebestik - c46c94e)*
+
+---
+
 ## v1.3.0 (2024-10-05)
 
 ### ✨ New features
@@ -26,31 +46,35 @@
 - **fake**: update developer setup guide with latest dependencies 367 *(Tomas Sebestik - 9f2a21f)*
 - **fake**: update developer setup guide with latest dependencies 365 *(Tomas Sebestik - a126551)*
 
+---
+
 ## v1.2.0 (2024-10-05)
 
 ### ✨ New features
 
 - **test-suite**: add tests changelog/plugin, compare with snapshots (syrupy module) *(Tomas Sebestik - c4d78e3)*
-- **changelog**: custom template for release notes (GH action) *(Tomas Sebestik - 19e8cec)*
-- **plugin**: add plugin, commit message questions, changelog template (#1) *(Tomas Sebestik - f2fa815)*
-- init commit, project basic structure (from template commitizen) *(Tomas Sebestik - 61c03ec)*
 
 ### 🐛 Bug fixes
 
 - **changelog**: fix double title, header and footer on 'cz bump' *(Tomas Sebestik - b5a1227)*
-- **github-actions**: update create-release.yml, missing "v" in version
-- (dependabot): update dependabot config file, team reviewers
-- (justfile): add recipe for local cleanup temp, manual tests *(Tomas Sebestik - f601dbf)*
-- **pre-commit**: change lang from system to python to be able install deps *(Tomas Sebestik - 7443af0)*
 
 ### 📖 Documentation
 
 - **contributing**: update docs for setup dev environment and testing *(Tomas Sebestik - dfca4d6)*
-- **readme**: docs to automatic process of "Release notes" *(Tomas Sebestik - 6a18980)*
 
 ### 🔧 Code refactoring
 
 - **python-3.9**: refactor syntax and typing for python 3.9 *(Tomas Sebestik - e5a83c6)*
+
+---
+
+## v1.1.0 (2024-09-24)
+
+### 🐛 Bug fixes
+
+- **github-actions**: update create-release.yml, missing "v" in version
+- (dependabot): update dependabot config file, team reviewers
+- (justfile): add recipe for local cleanup temp, manual tests *(Tomas Sebestik - f601dbf)*
 
 ---
 
