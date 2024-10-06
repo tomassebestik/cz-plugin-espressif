@@ -61,60 +61,36 @@ jobs:
           name: build-artifact-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
           path: dist
 
-  collect-and-upload:
+  create-release:
     needs: build-release-assets
     runs-on: ubuntu-latest
     permissions:
-      contents: write # To upload the deduplicated artifacts
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v3
         with:
           path: ./artifacts
 
-      - name: Remove duplicates (Compare only wheel files, copy source code directly)
-        run: |
-          mkdir -p deduplicated
-          # Compare and deduplicate wheel files
-          for file in ./artifacts/**/czespressif-*.whl; do
-            filename=$(basename $file)
-            if [[ -f "deduplicated/$filename" ]]; then
-              if ! cmp -s "$file" "deduplicated/$filename"; then
-                echo "Warning: Files $file and deduplicated/$filename are different!"
-              else
-                echo "Overwriting $filename since the content is the same."
-                cp -f "$file" "deduplicated/$filename"
-              fi
-            else
-              cp "$file" "deduplicated/$filename"
-            fi
-          done
+      - name: Create deduplicated directory
+        run: mkdir -p deduplicated
 
-          # Directly copy the source code archive (czespressif-*.tar.gz)
-          cp -f ./artifacts/**/czespressif-*.tar.gz deduplicated/ || true
+      - name: Remove duplicates of wheel files
+        run: find ./artifacts -name "czespressif-*.whl" -exec cp -f {} deduplicated/ \;
+
+      - name: Copy source code archive
+        run: cp -n ./artifacts/**/czespressif-*.tar.gz deduplicated/ || true
+
+      - name: Show deduplicated artifacts
+        run: |
+          echo "Listing deduplicated artifacts:"
+          ls -la ./deduplicated
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@v3
         with:
           name: czespressif-merged-builds
           path: deduplicated
-
-  create-release:
-    needs: collect-and-upload
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download deduplicated artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: czespressif-merged-builds
-          path: ./deduplicated
-
-      - name: Show deduplicated artifacts
-        run: |
-          echo "Listing deduplicated artifacts:"
-          ls -la ./deduplicated
 
       # - name: Checkout repository
       #   uses: actions/checkout@v4
