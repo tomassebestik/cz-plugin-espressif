@@ -53,11 +53,20 @@ jobs:
           source venv/bin/activate
           pip install --require-virtualenv --upgrade pip
           pip install --require-virtualenv build
+
       - name: Build python wheels + package source code
         run: |
           source venv/bin/activate
           python -m build
           ls -la dist/
+          tar -tzf $(ls dist/*.tar.gz)
+
+      - name: Validate build integrity
+        run: |
+          set -e
+          echo "Check python builds:" && ls -la dist/*.{whl,tar.gz}
+          echo "Check source code archive integrity:" && tar -tzf $(ls dist/*.tar.gz)
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -72,7 +81,7 @@ jobs:
         uses: actions/upload-artifact/merge@v4
         with:
           name: czespressif-build-merged
-          pattern: czespressif-build-*
+          pattern: czespressif-build-*.whl
           compression-level: 0
           retention-days: 1
           delete-merged: true
@@ -88,19 +97,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get project release version
-        id: release_version
-        run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
-
-      - name: Fail if version doesn't match pattern (e.g., v1.2.3, 1.2.3, 1.2.3-alpha.1)
-        run: |
-          echo "Version: ${{ steps.release_version.outputs.VERSION }}"
-          [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]] || exit 1
       - name: Download all builds
         uses: actions/download-artifact@v4
         with:
           path: ./release-assets
-          name: czespressif-build-merged
+          # name: czespressif-build-merged
+
+      - name: Get project release version
+        id: release_version
+        run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
+      - name: Check all assets ready (or fail here)
+        run: |
+          set -e
+          echo "Check version: ${{ steps.release_version.outputs.VERSION }}"
+          echo "Check version fits pattern: && [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]]"
+          echo "Check python builds:" && ls -la release-assets/*.{whl,tar.gz}
+          echo "Check source code archive integrity:" && tar -tzf $(ls release-assets/*.tar.gz)
 
       - name: Set up Python to install this project
         uses: actions/setup-python@v5
@@ -114,10 +127,12 @@ jobs:
           source venv/bin/activate
           pip install --require-virtualenv --upgrade pip
           pip install --require-virtualenv '.[test]'
+
       - name: Create Release notes
         run: |
           source venv/bin/activate
           cz changelog ${{ steps.release_version.outputs.VERSION }} --file-name RELEASE_NOTES.md
+
       - name: Check all assets ready (or fail here)
         run: |
           set -e
@@ -126,19 +141,22 @@ jobs:
           echo "Check release notes file:" && cat RELEASE_NOTES.md
           echo "Check python builds:" && ls -la release-assets/*.{whl,tar.gz}
           echo "Check source code archive integrity:" && tar -tzf $(ls release-assets/*.tar.gz)
-      # - name: Create GitHub release (and upload assets)
-      #   id: create_release
-      #   uses: softprops/action-gh-release@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     body_path: RELEASE_NOTES.md
-      #     name: Version v${{ env.VERSION }}
-      #     draft: false
-      #     prerelease: false
-      #     files: |
-      #       dist/*.whl
-      #       dist/*.tar.gz
+
+      - name: Create GitHub release (and upload assets)
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body_path: RELEASE_NOTES.md
+          name: ${{ steps.release_version.outputs.VERSION }}
+          tag_name: ${{ steps.release_version.outputs.VERSION }} # expects a tag with the same name as the version
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            release-assets/*.whl
+            release-assets/*.tar.gz
 
   create-pypi-release:
     needs: merge-release-assets
