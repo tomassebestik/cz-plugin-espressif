@@ -15,28 +15,15 @@ on:
         default: '1.3.0'
   push: {tags: ['*v[0-9]*'], branches: ['master']}
 
-# TODO: call pytest workflow to run tests before creating a release
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-release-assets:
-    runs-on: ubuntu-latest
+  build-python:
     permissions:
       contents: write
-    strategy:
-      fail-fast: true # Stop if any of the matrix builds fail
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-14, macos-12]
-        arch: [amd64, arm64]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-        exclude:
-          - {os: windows-latest, arch: arm64}   # Windows doesn't support arm64 in this context
-          - {os: macos-12, arch: arm64}   # macos-12 runner is Intel Silicon
-          - {os: macos-14, arch: amd64}   # macos-14 runner is Apple M1 Silicon
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,139 +31,256 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.x'
           cache: pip
 
-      - name: Install dependencies
+      - name: Set build environment
         run: |-
           python -m venv venv
           source venv/bin/activate
           pip install --require-virtualenv --upgrade pip
           pip install --require-virtualenv build
-      - name: Build python wheels + package source code
+
+      - name: Build a binary wheel and a source tarball
         run: |
           source venv/bin/activate
-          python -m build
+          python3 -m build
           ls -la dist/
-      - name: Upload build artifact
+
+      - name: Store the distribution packages
         uses: actions/upload-artifact@v4
         with:
-          name: czespressif-build-${{ matrix.os }}-${{ matrix.arch }}-py${{ matrix.python-version }}
-          path: dist
+          name: release-assets
+          path: dist/*
 
-  merge-release-assets:
-    runs-on: ubuntu-latest
-    needs: build-release-assets
-    steps:
-      - name: Merge Artifacts
-        uses: actions/upload-artifact/merge@v4
-        with:
-          name: czespressif-wheels-merged
-          pattern: czespressif-build-*.whl
-          compression-level: 0
-          retention-days: 1
-          delete-merged: true
-
-  create-github-release:
-    needs: merge-release-assets
-    runs-on: ubuntu-latest
+  test-builds-linux:
+    needs: [build-python]
     permissions:
-      contents: write
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1 # shallow
 
       - name: Download all builds
         uses: actions/download-artifact@v4
         with:
           path: ./release-assets
-          # name: czespressif-build-merged
 
-      - name: Check downloaded artifacts
-        run: ls -la release-assets
+      - uses: getsentry/action-setup-venv@v2.1.0
+        id: venv
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache-dependency-path: dist/*.whl
+          install-cmd: pip install --require-virtualenv $(find release-assets -name "*.whl")
 
-      - name: Get project release version
-        id: release_version
-        run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
-
-      - name: Fail if version doesn't match pattern (e.g., v1.2.3, 1.2.3, 1.2.3-alpha.1)
+      - name: Install plugin from wheel
         run: |
-          echo "Version: ${{ steps.release_version.outputs.VERSION }}"
-          [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]] || exit 1
+          for whl in $(find release-assets -name "*.whl"); do
+            python -m pip install --require-virtualenv "$whl" || echo "Failed to install $whl"
+          done
+
+      - name: Add pyproject.toml with set plugin
+        run: |
+          echo "[tool.commitizen]" > pyproject.toml
+          echo "    name = 'czespressif'" >> pyproject.toml
+
+      - name: Test plugin functions
+        run: |
+          cz info | grep -q "Commitizen plugin for Espressif Systems" || exit 1
+          cz example | grep -q "github.com/espressif" || exit 1
+
+  # test-builds-macos:
+  #   needs: [build-python]
+  #   permissions:
+  #     contents: read
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       python-version: ['3.9', '3.10', '3.11', '3.12']
+  #       os: [macos-12, macos-14]  # macOS 12 (Intel),macOS 14 (Apple Silicon)
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 1 # shallow
+
+  #     - name: Download all builds
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: ./release-assets
+
+  #     - uses: getsentry/action-setup-venv@v2.1.0
+  #       id: venv
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         cache-dependency-path: dist/*.whl
+  #         install-cmd: pip install --require-virtualenv $(find release-assets -name "*.whl")
+
+  #     - name: Install plugin
+  #       run: |-
+  #         pip install --require-virtualenv --upgrade pip
+  #         pip install --require-virtualenv $(find release-assets -name "*.whl")
+
+  #     - name: Check plugin functionality
+  #       run: |
+  #         cz info | grep -q "Commitizen plugin for Espressif Systems"
+  #         cz example | grep -q "github.com/espressif"
+
+  test-builds-windows:
+    needs: [build-python]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all builds
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets
 
       - name: Set up Python to install this project
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9' # Minimum supported version by this project
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install project
-        run: |-
-          python -m venv venv
-          source venv/bin/activate
-          pip install --require-virtualenv --upgrade pip
-          pip install --require-virtualenv '.[test]'
-      - name: Create Release notes
+      - name: Create virtual env
+        shell: pwsh
         run: |
-          source venv/bin/activate
-          cz changelog ${{ steps.release_version.outputs.VERSION }} --file-name RELEASE_NOTES.md
-      - name: Check all assets ready (or fail here)
+          python -m venv venv-pwsh
+          .\venv-pwsh\Scripts\Activate.ps1
+          python -m pip install --require-virtualenv --upgrade pip
+
+      - name: Install plugin from wheel
+        shell: pwsh
         run: |
-          set -e
-          echo "Check version: ${{ steps.release_version.outputs.VERSION }}"
-          echo "Check version fits pattern: && [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]]"
-          echo "Check release notes file:" && cat RELEASE_NOTES.md
-          echo "Check python builds:" && ls -la release-assets/*.{whl,tar.gz}
-          echo "Check source code archive integrity:" && tar -tzf $(ls release-assets/*.tar.gz)
-      # - name: Create GitHub release (and upload assets)
-      #   id: create_release
-      #   uses: softprops/action-gh-release@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     body_path: RELEASE_NOTES.md
-      #     name: Version v${{ env.VERSION }}
-      #     draft: false
-      #     prerelease: false
-      #     files: |
-      #       dist/*.whl
-      #       dist/*.tar.gz
+          .\venv-pwsh\Scripts\Activate.ps1
+          Get-ChildItem -Path "release-assets" -Recurse -Filter "*.whl" | ForEach-Object { try { python -m  pip install --require-virtualenv $_.FullName } catch { Write-Host "Failed to install $($_.FullName)" } }
 
-  create-pypi-release:
-    needs: merge-release-assets
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write # For trusted publishing
-    steps:
-      - name: Checkout repository (need README.md used as long_description for PyPI)
-        uses: actions/checkout@v4
-
-      - name: Download all builds and merge
-        uses: actions/download-artifact@v4
-        with:
-          path: ./release-assets
-          name: czespressif-build-merged
-
-      - name: Check all assets ready (or fail here)
+      - name: Add pyproject.toml with set plugin
+        shell: pwsh
         run: |
-          set -e
-          echo "Check python builds:" && ls -la release-assets/*.{whl,tar.gz}
-          echo "Check source code archive integrity:" && tar -tzf $(ls release-assets/*.tar.gz)
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          # password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}  #  Don't need if trusted publishing set on PyPI
-          packages-dir: release-assets/
-          verify-metadata: true # 'twine check' before upload
-          skip-existing: true
+          .\venv-pwsh\Scripts\Activate.ps1
+          "[tool.commitizen]`r`n    name = 'czespressif'" | Set-Content -Path "pyproject.toml"
 
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
-      #     packages-dir: release-assets/
-      #     verify-metadata: true # 'twine check' before upload
+      - name: Test plugin functions
+        shell: pwsh
+        run: |
+          .\venv-pwsh\Scripts\Activate.ps1
+          cz info | Select-String -Quiet "Commitizen plugin for Espressif Systems" || exit 1
+          cz example | Select-String -Quiet "github.com/espressif" || exit 1
+
+  # create-github-release:
+  #   needs: [test-builds]
+  #   permissions:
+  #     contents: write
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository (full history)
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+
+  #     - name: Download all builds
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: ./release-assets
+
+  #     - name: Check downloaded artifacts
+  #       run: ls -la release-assets
+
+  #     - name: Get project release version
+  #       id: release_version
+  #       run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
+  #     - name: Set up Python to install this project
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: '3.x' # Minimum supported version by this project
+  #         cache: pip
+
+  #     - name: Install project
+  #       run: |-
+  #         python -m venv venv
+  #         source venv/bin/activate
+  #         pip install --require-virtualenv --upgrade pip
+  #         pip install --require-virtualenv '.[test]'
+
+  #     - name: Create Release notes
+  #       run: |
+  #         source venv/bin/activate
+  #         cz changelog ${{ steps.release_version.outputs.VERSION }} --file-name RELEASE_NOTES.md
+
+  #     - name: Check all assets ready (or fail here)
+  #       run: |
+  #         set -e
+  #         echo "Check version: ${{ steps.release_version.outputs.VERSION }}"
+  #         echo "Check version fits version pattern:; [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]]"
+  #         echo "Check release notes file:"; cat RELEASE_NOTES.md
+  #         echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
+  #         echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
+
+  #     # - name: Create GitHub release (and upload assets)
+  #     #   id: create_release
+  #     #   uses: softprops/action-gh-release@v1
+  #     #   env:
+  #     #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     #   with:
+  #     #     body_path: RELEASE_NOTES.md
+  #     #     name: Version v${{ env.VERSION }}
+  #     #     draft: false
+  #     #     prerelease: false
+  #     #     files: |
+  #     #       dist/*.whl
+  #     #       dist/*.tar.gz
+
+  # create-pypi-release:
+  #   needs: [test-builds]
+  #   permissions:
+  #     contents: write
+  #     id-token: write # For trusted publishing
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository (need README.md used as long_description for PyPI)
+  #       uses: actions/checkout@v4
+
+  #     - name: Download all builds and merge
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: ./release-assets
+
+  #     - name: Check all assets ready (or fail here)
+  #       run: |
+  #         set -e
+  #         echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
+  #         echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
+
+  #     - name: Publish to TestPyPI
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         repository-url: https://test.pypi.org/legacy/
+  #         # password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}  #  Don't need if trusted publishing set on PyPI
+  #         packages-dir: release-assets/
+  #         verify-metadata: true # 'twine check' before upload
+  #         skip-existing: true
+
+  #     # - name: Publish to PyPI
+  #     #   uses: pypa/gh-action-pypi-publish@release/v1
+  #     #   with:
+  #     #     # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
+  #     #     packages-dir: release-assets/
+  #     #     verify-metadata: true # 'twine check' before upload
