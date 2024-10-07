@@ -8,11 +8,8 @@ name: 📦 Create Release GitHub and PyPI
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.3.0)'
-        required: true
-  push: {tags: ['*v[0-9]*'], branches: ['master']}
+    inputs: {version: {description: 'Release version (e.g., v1.3.0)', required: true}}
+  push: {tags: ['*v[0-9]*']}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
