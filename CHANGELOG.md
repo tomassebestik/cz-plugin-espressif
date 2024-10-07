@@ -14,10 +14,11 @@
 </div>
 <hr>
 
-## Unreleased
+## v1.4.0 (2024-10-07)
 
 ### ✨ New features
 
+- **ci**: merge artifact in download step *(Tomas Sebestik - 85a3184)*
 - **fake**: implement caching for database queries 612 *(Tomas Sebestik - adcb0e3)*
 
 ### 📖 Documentation
@@ -31,8 +32,6 @@
 ### 🗑️ Removals
 
 - **fake**: delete old configuration files no longer in use 612 *(Tomas Sebestik - c46c94e)*
-
----
 
 ## v1.3.0 (2024-10-05)
 
