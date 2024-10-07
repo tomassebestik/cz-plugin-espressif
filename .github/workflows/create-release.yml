@@ -96,43 +96,49 @@ jobs:
           cz info | grep -q "Commitizen plugin for Espressif Systems" || exit 1
           cz example | grep -q "github.com/espressif" || exit 1
 
-  # test-builds-macos:
-  #   needs: [build-python]
-  #   permissions:
-  #     contents: read
-  #   strategy:
-  #     fail-fast: true
-  #     matrix:
-  #       python-version: ['3.9', '3.10', '3.11', '3.12']
-  #       os: [macos-12, macos-14]  # macOS 12 (Intel),macOS 14 (Apple Silicon)
-  #   runs-on: ${{ matrix.os }}
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 1 # shallow
+  test-builds-macos:
+    needs: [build-python]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        os: [macos-12, macos-14]  # macOS 12 (Intel),macOS 14 (Apple Silicon)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # shallow
 
-  #     - name: Download all builds
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: ./release-assets
+      - name: Download all builds
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets
 
-  #     - uses: getsentry/action-setup-venv@v2.1.0
-  #       id: venv
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #         cache-dependency-path: dist/*.whl
-  #         install-cmd: pip install --require-virtualenv $(find release-assets -name "*.whl")
+      - uses: getsentry/action-setup-venv@v2.1.0
+        id: venv
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache-dependency-path: dist/*.whl
+          install-cmd: pip install --require-virtualenv $(find release-assets -name "*.whl")
 
-  #     - name: Install plugin
-  #       run: |-
-  #         pip install --require-virtualenv --upgrade pip
-  #         pip install --require-virtualenv $(find release-assets -name "*.whl")
+      - name: Install plugin from wheel
+        run: |
+          for whl in $(find release-assets -name "*.whl"); do
+            python -m pip install --require-virtualenv "$whl" || echo "Failed to install $whl"
+          done
 
-  #     - name: Check plugin functionality
-  #       run: |
-  #         cz info | grep -q "Commitizen plugin for Espressif Systems"
-  #         cz example | grep -q "github.com/espressif"
+      - name: Add pyproject.toml with set plugin
+        run: |
+          echo "[tool.commitizen]" > pyproject.toml
+          echo "    name = 'czespressif'" >> pyproject.toml
+
+      - name: Test plugin functions
+        run: |
+          cz info | grep -q "Commitizen plugin for Espressif Systems" || exit 1
+          cz example | grep -q "github.com/espressif" || exit 1
 
   test-builds-windows:
     needs: [build-python]
@@ -184,103 +190,99 @@ jobs:
           cz info | Select-String -Quiet "Commitizen plugin for Espressif Systems" || exit 1
           cz example | Select-String -Quiet "github.com/espressif" || exit 1
 
-  # create-github-release:
-  #   needs: [test-builds]
-  #   permissions:
-  #     contents: write
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository (full history)
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+  create-github-release:
+    needs: [test-builds-linux, test-builds-macos, test-builds-windows]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  #     - name: Download all builds
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: ./release-assets
+      - name: Download all builds
+        uses: actions/download-artifact@v4
 
-  #     - name: Check downloaded artifacts
-  #       run: ls -la release-assets
+      - name: Check downloaded artifacts
+        run: ls -la release-assets
 
-  #     - name: Get project release version
-  #       id: release_version
-  #       run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+      - name: Get project release version
+        id: release_version
+        run: echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
 
-  #     - name: Set up Python to install this project
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: '3.x' # Minimum supported version by this project
-  #         cache: pip
+      - name: Set up Python to install this project
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Minimum supported version by this project
+          cache: pip
 
-  #     - name: Install project
-  #       run: |-
-  #         python -m venv venv
-  #         source venv/bin/activate
-  #         pip install --require-virtualenv --upgrade pip
-  #         pip install --require-virtualenv '.[test]'
+      - name: Install project
+        run: |-
+          python -m venv venv
+          source venv/bin/activate
+          pip install --require-virtualenv --upgrade pip
+          pip install --require-virtualenv .
 
-  #     - name: Create Release notes
-  #       run: |
-  #         source venv/bin/activate
-  #         cz changelog ${{ steps.release_version.outputs.VERSION }} --file-name RELEASE_NOTES.md
+      - name: Create Release notes
+        run: |
+          source venv/bin/activate
+          cz changelog ${{ steps.release_version.outputs.VERSION }} --file-name RELEASE_NOTES.md
 
-  #     - name: Check all assets ready (or fail here)
-  #       run: |
-  #         set -e
-  #         echo "Check version: ${{ steps.release_version.outputs.VERSION }}"
-  #         echo "Check version fits version pattern:; [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]]"
-  #         echo "Check release notes file:"; cat RELEASE_NOTES.md
-  #         echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
-  #         echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
+      - name: Check all assets ready (or fail here)
+        run: |
+          set -e
+          echo "Check version: ${{ steps.release_version.outputs.VERSION }}"
+          echo "Check version fits version pattern:; [[ "${{ steps.release_version.outputs.VERSION }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(\.[a-z0-9]+)?$ ]]"
+          echo "Check release notes file:"; cat RELEASE_NOTES.md
+          echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
+          echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
 
-  #     # - name: Create GitHub release (and upload assets)
-  #     #   id: create_release
-  #     #   uses: softprops/action-gh-release@v1
-  #     #   env:
-  #     #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #     #   with:
-  #     #     body_path: RELEASE_NOTES.md
-  #     #     name: Version v${{ env.VERSION }}
-  #     #     draft: false
-  #     #     prerelease: false
-  #     #     files: |
-  #     #       dist/*.whl
-  #     #       dist/*.tar.gz
+      # - name: Create GitHub release (and upload assets)
+      #   id: create_release
+      #   uses: softprops/action-gh-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     body_path: RELEASE_NOTES.md
+      #     name: Version v${{ env.VERSION }}
+      #     draft: false
+      #     prerelease: false
+      #     files: |
+      #       dist/*.whl
+      #       dist/*.tar.gz
 
-  # create-pypi-release:
-  #   needs: [test-builds]
-  #   permissions:
-  #     contents: write
-  #     id-token: write # For trusted publishing
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository (need README.md used as long_description for PyPI)
-  #       uses: actions/checkout@v4
+  create-pypi-release:
+    needs: [test-builds-linux, test-builds-macos, test-builds-windows]
+    permissions:
+      contents: write
+      id-token: write # For trusted publishing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (need README.md used as long_description for PyPI)
+        uses: actions/checkout@v4
 
-  #     - name: Download all builds and merge
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: ./release-assets
+      - name: Download all builds and merge
+        uses: actions/download-artifact@v4
 
-  #     - name: Check all assets ready (or fail here)
-  #       run: |
-  #         set -e
-  #         echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
-  #         echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
+      - name: Check all assets ready (or fail here)
+        run: |
+          set -e
+          echo "Check python builds:"; ls -la release-assets/*.{whl,tar.gz}
+          echo "Check source code archive integrity:"; tar -tzf $(ls release-assets/*.tar.gz)
 
-  #     - name: Publish to TestPyPI
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         repository-url: https://test.pypi.org/legacy/
-  #         # password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}  #  Don't need if trusted publishing set on PyPI
-  #         packages-dir: release-assets/
-  #         verify-metadata: true # 'twine check' before upload
-  #         skip-existing: true
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # password: ${{ secrets.TEST_PYPI_PROJECT_TOKEN }}  #  Don't need if trusted publishing set on PyPI
+          packages-dir: release-assets/
+          verify-metadata: true # 'twine check' before upload
+          skip-existing: true
 
-  #     # - name: Publish to PyPI
-  #     #   uses: pypa/gh-action-pypi-publish@release/v1
-  #     #   with:
-  #     #     # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
-  #     #     packages-dir: release-assets/
-  #     #     verify-metadata: true # 'twine check' before upload
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     # password: ${{ secrets.PYPI_PROJECT_TOKEN }}   #  Don't need if trusted publishing set on PyPI
+      #     packages-dir: release-assets/
+      #     verify-metadata: true # 'twine check' before upload
