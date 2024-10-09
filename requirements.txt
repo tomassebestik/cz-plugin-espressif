@@ -28,7 +28,7 @@ pyyaml==6.0.2
     # via commitizen
 questionary==2.0.1
     # via commitizen
-termcolor==2.4.0
+termcolor==2.5.0
     # via commitizen
 tomlkit==0.13.2
     # via commitizen
