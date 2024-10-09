@@ -6,7 +6,7 @@
 #
 argcomplete==3.5.0
     # via commitizen
-charset-normalizer==3.3.2
+charset-normalizer==3.4.0
     # via commitizen
 colorama==0.4.6
     # via commitizen
