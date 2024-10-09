@@ -1,11 +1,22 @@
 ---
+# This Dependabot configuration enables automatic updates for pip and GitHub Actions.
+# After adding this config to a new repository, make sure to also:
+# 1. Enable "Dependabot alerts" in the repository settings under
+#    Settings > Security & Analysis > Code security > Dependabot alerts
+#    (unless it is already set at the organization level).
+# 2. Enable "Dependabot security updates" to automatically create PRs for vulnerable dependencies
+#    (unless it is already set at the organization level).
+# 3. Optionally, configure Dependabot rules in the Code security settings for additional alert management
+#    (these rules need to be set per repository, as they cannot be configured organization-wide).
+# These steps will ensure full Dependabot functionality for dependency updates and security alerts.
+
 version: 2
 
 updates:
   - package-ecosystem: pip
-    # versioning-strategy: increase-if-necessary
+    versioning-strategy: increase-if-necessary
     directory: '/'
-    schedule: {interval: daily, time: '20:35', timezone: Europe/Prague}
+    schedule: {interval: weekly, day: monday, time: '05:00', timezone: Europe/Prague}
     open-pull-requests-limit: 10 # Only security updates
     groups:
       pip-security-updates:
@@ -24,14 +35,14 @@ updates:
 
   - package-ecosystem: github-actions
     directory: '/'
-    schedule: {interval: daily, time: '21:30', timezone: Europe/Prague}
+    schedule: {interval: weekly, day: monday, time: '05:00', timezone: Europe/Prague}
     groups:
       github-actions-security-updates:
         applies-to: security-updates
-        update-types: [minor, patch] # Group minor and patch updates (for major create separate PR
+        update-types: [minor, patch]
       github-actions-version-updates:
         applies-to: version-updates
-        update-types: [minor, patch] # Group minor and patch updates (for major create separate PR
+        update-types: [minor, patch]
     commit-message: {prefix: 'ci(dependabot-ci): [skip ci]'}
     reviewers: ['tomassebestik']
     labels: ['dependencies', 'Status: Reviewing']
