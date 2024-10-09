@@ -3,25 +3,28 @@ version: 2
 
 updates:
   - package-ecosystem: pip
-    versioning-strategy: increase-if-necessary
+    # versioning-strategy: increase-if-necessary
     directory: '/'
-    schedule: {interval: weekly, day: 'monday', time: '05:00', timezone: Europe/Prague}
-    open-pull-requests-limit: 0 # Only security updates
+    schedule: {interval: daily, time: '20:35', timezone: Europe/Prague}
+    open-pull-requests-limit: 10 # Only security updates
     groups:
       pip-security-updates:
         applies-to: security-updates
         update-types: [minor, patch]
       pip-version-updates:
         applies-to: version-updates
-        update-types: [minor]
+        update-types: [minor, patch]
     commit-message: {prefix: 'ci(deps-pip): [skip ci]'}
     reviewers: ['tomassebestik']
     labels: ['dependencies', 'Status: Reviewing']
     pull-request-branch-name: {separator: '-'}
+    ignore:
+      - dependency-name: "pre-commit"
+        update-types: ["version-update:semver-patch"]
 
   - package-ecosystem: github-actions
     directory: '/'
-    schedule: {interval: weekly, day: 'monday', time: '05:00', timezone: Europe/Prague}
+    schedule: {interval: daily, time: '21:30', timezone: Europe/Prague}
     groups:
       github-actions-security-updates:
         applies-to: security-updates
