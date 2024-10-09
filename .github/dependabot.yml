@@ -18,9 +18,6 @@ updates:
     reviewers: ['tomassebestik']
     labels: ['dependencies', 'Status: Reviewing']
     pull-request-branch-name: {separator: '-'}
-    ignore:
-      - dependency-name: '*'
-        versions: ['*']
 
   - package-ecosystem: github-actions
     directory: '/'
@@ -36,6 +33,3 @@ updates:
     reviewers: ['tomassebestik']
     labels: ['dependencies', 'Status: Reviewing']
     pull-request-branch-name: {separator: '-'}
-    ignore:
-      - dependency-name: '*'
-        versions: ['*']
